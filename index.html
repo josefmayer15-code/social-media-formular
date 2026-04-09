@@ -11,12 +11,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #
 h1 { font-size: 22px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
 p.sub { font-size: 14px; color: #666; margin-bottom: 32px; }
 label { display: block; font-size: 14px; font-weight: 500; color: #333; margin-bottom: 8px; }
-textarea { width: 100%; border: 1.5px solid #e5e5e5; border-radius: 10px; padding: 12px 16px; font-size: 14px; font-family: inherit; color: #333; resize: vertical; min-height: 120px; margin-bottom: 28px; outline: none; }
+.optional { font-size: 12px; color: #999; font-weight: 400; margin-left: 6px; }
+textarea { width: 100%; border: 1.5px solid #e5e5e5; border-radius: 10px; padding: 12px 16px; font-size: 14px; font-family: inherit; color: #333; resize: vertical; min-height: 100px; margin-bottom: 28px; outline: none; }
 textarea:focus { border-color: #555; }
 textarea::placeholder { color: #aaa; }
-button { width: 100%; background: #1a1a1a; color: white; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 500; cursor: pointer; }
-button:hover { background: #333; }
-button:disabled { background: #999; cursor: not-allowed; }
+.upload-area { border: 2px dashed #e5e5e5; border-radius: 10px; padding: 32px 16px; text-align: center; margin-bottom: 28px; cursor: pointer; transition: all 0.2s; background: #fafafa; }
+.upload-area:hover { border-color: #999; background: #f5f5f5; }
+.upload-area.has-image { border-color: #16a34a; border-style: solid; background: #f0fdf4; }
+.upload-icon { font-size: 36px; margin-bottom: 8px; }
+.upload-text { font-size: 14px; color: #666; }
+.upload-text strong { color: #1a1a1a; }
+#fileInput { display: none; }
+#preview { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 12px; display: none; }
+.remove-img { display: none; margin-top: 10px; background: none; border: 1px solid #dc2626; color: #dc2626; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; width: auto; }
+.remove-img:hover { background: #fef2f2; }
+button.submit { width: 100%; background: #1a1a1a; color: white; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 4px; }
+button.submit:hover { background: #333; }
+button.submit:disabled { background: #999; cursor: not-allowed; }
 .status { margin-top: 16px; padding: 12px 16px; border-radius: 10px; font-size: 14px; text-align: center; display: none; }
 .success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
 .error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
@@ -26,32 +37,94 @@ button:disabled { background: #999; cursor: not-allowed; }
 <body>
 <div class="card">
   <h1>Social Media Post erstellen</h1>
-  <p class="sub">Beschreibe die Maschine – KI erstellt den Post-Text automatisch.</p>
-  <label>Beschreibung der Maschine *</label>
-  <textarea id="text" placeholder="z.B. Fuchs F800 Hoflader, Baujahr 2022, Neuankunft, Sonderpreis diese Woche"></textarea>
-  <button id="btn" onclick="senden()">Post erstellen →</button>
+  <p class="sub">Lade ein Foto hoch – die KI erstellt den Post-Text automatisch.</p>
+  <label>Foto der Maschine *</label>
+  <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+    <div class="upload-icon">📷</div>
+    <div class="upload-text"><strong>Foto auswählen</strong> oder hierher ziehen</div>
+    <img id="preview" src="" alt="Vorschau" />
+    <button class="remove-img" id="removeBtn" onclick="bildEntfernen(event)">✕ Bild entfernen</button>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" onchange="bildGewaehlt(event)" />
+  <label>Zusatzinfo <span class="optional">(optional)</span></label>
+  <textarea id="text" placeholder="z.B. Sonderpreis diese Woche, Neuankunft, Baujahr 2022 ..."></textarea>
+  <button class="submit" id="btn" onclick="senden()">Post erstellen →</button>
   <div class="status" id="status"></div>
 </div>
 <script>
+const IMGBB_KEY = '4478dc0dfe705ecbc1325b0d3b10e641';
+const WEBHOOK = 'https://hook.eu1.make.com/9v6d4gmsk3cy2i7906qjc8poixvpkjv1';
+let selectedFile = null;
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) zeigeVorschau(file);
+});
+function bildGewaehlt(event) {
+  const file = event.target.files[0];
+  if (file) zeigeVorschau(file);
+}
+function zeigeVorschau(file) {
+  selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview = document.getElementById('preview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    document.getElementById('removeBtn').style.display = 'inline-block';
+    uploadArea.classList.add('has-image');
+    uploadArea.querySelector('.upload-icon').style.display = 'none';
+    uploadArea.querySelector('.upload-text').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+function bildEntfernen(event) {
+  event.stopPropagation();
+  selectedFile = null;
+  document.getElementById('preview').style.display = 'none';
+  document.getElementById('removeBtn').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  uploadArea.classList.remove('has-image');
+  uploadArea.querySelector('.upload-icon').style.display = 'block';
+  uploadArea.querySelector('.upload-text').style.display = 'block';
+}
+async function bildHochladen(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+  const r = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
+    method: 'POST',
+    body: formData
+  });
+  const data = await r.json();
+  if (data.success) return data.data.url;
+  throw new Error('Bild-Upload fehlgeschlagen');
+}
 async function senden() {
+  if (!selectedFile) { zeig('Bitte ein Foto auswählen.', 'error'); return; }
   const text = document.getElementById('text').value.trim();
-  if (!text) { zeig('Bitte eine Beschreibung eingeben.', 'error'); return; }
   document.getElementById('btn').disabled = true;
-  zeig('KI erstellt den Post-Text...', 'loading');
+  zeig('⏳ Bild wird hochgeladen...', 'loading');
   try {
-    const r = await fetch('https://hook.eu1.make.com/9v6d4gmsk3cy2i7906qjc8poixvpkjv1', {
+    const bildUrl = await bildHochladen(selectedFile);
+    zeig('🤖 KI erstellt den Post-Text...', 'loading');
+    const r = await fetch(WEBHOOK, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ text: text, zeitstempel: new Date().toISOString() })
+      body: JSON.stringify({ bild_url: bildUrl, text: text, zeitstempel: new Date().toISOString() })
     });
     if (r.ok) {
       zeig('✅ Erfolgreich! KI erstellt jetzt den Post-Text.', 'success');
       document.getElementById('text').value = '';
+      bildEntfernen({ stopPropagation: () => {} });
     } else {
       zeig('Fehler beim Senden. Bitte nochmal versuchen.', 'error');
     }
   } catch(e) {
-    zeig('Verbindungsfehler: ' + e.message, 'error');
+    zeig('Fehler: ' + e.message, 'error');
   }
   document.getElementById('btn').disabled = false;
 }
