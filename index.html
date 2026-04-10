@@ -55,6 +55,9 @@ button.submit:disabled { background: #999; cursor: not-allowed; }
 const IMGBB_KEY = '4478dc0dfe705ecbc1325b0d3b10e641';
 const WEBHOOK = 'https://hook.eu1.make.com/9v6d4gmsk3cy2i7906qjc8poixvpkjv1';
 let selectedFile = null;
+let base64Data = null;
+let base64MediaType = null;
+
 const uploadArea = document.getElementById('uploadArea');
 uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
 uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
@@ -64,16 +67,22 @@ uploadArea.addEventListener('drop', e => {
   const file = e.dataTransfer.files[0];
   if (file && file.type.startsWith('image/')) zeigeVorschau(file);
 });
+
 function bildGewaehlt(event) {
   const file = event.target.files[0];
   if (file) zeigeVorschau(file);
 }
+
 function zeigeVorschau(file) {
   selectedFile = file;
+  base64MediaType = file.type;
   const reader = new FileReader();
   reader.onload = e => {
+    const result = e.target.result;
+    // Base64 ohne den "data:image/...;base64," Prefix speichern
+    base64Data = result.split(',')[1];
     const preview = document.getElementById('preview');
-    preview.src = e.target.result;
+    preview.src = result;
     preview.style.display = 'block';
     document.getElementById('removeBtn').style.display = 'inline-block';
     uploadArea.classList.add('has-image');
@@ -82,9 +91,12 @@ function zeigeVorschau(file) {
   };
   reader.readAsDataURL(file);
 }
+
 function bildEntfernen(event) {
   event.stopPropagation();
   selectedFile = null;
+  base64Data = null;
+  base64MediaType = null;
   document.getElementById('preview').style.display = 'none';
   document.getElementById('removeBtn').style.display = 'none';
   document.getElementById('fileInput').value = '';
@@ -92,6 +104,7 @@ function bildEntfernen(event) {
   uploadArea.querySelector('.upload-icon').style.display = 'block';
   uploadArea.querySelector('.upload-text').style.display = 'block';
 }
+
 async function bildHochladen(file) {
   const formData = new FormData();
   formData.append('image', file);
@@ -103,18 +116,27 @@ async function bildHochladen(file) {
   if (data.success) return data.data.url;
   throw new Error('Bild-Upload fehlgeschlagen');
 }
+
 async function senden() {
   if (!selectedFile) { zeig('Bitte ein Foto auswählen.', 'error'); return; }
   const text = document.getElementById('text').value.trim();
   document.getElementById('btn').disabled = true;
   zeig('⏳ Bild wird hochgeladen...', 'loading');
   try {
+    // ImgBB URL für Buffer
     const bildUrl = await bildHochladen(selectedFile);
     zeig('🤖 KI erstellt den Post-Text...', 'loading');
+    // Webhook mit BEIDEN: ImgBB URL (für Buffer) + Base64 (für Claude)
     const r = await fetch(WEBHOOK, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ bild_url: bildUrl, text: text, zeitstempel: new Date().toISOString() })
+      body: JSON.stringify({
+        bild_url: bildUrl,
+        bild_base64: base64Data,
+        bild_mediatype: base64MediaType,
+        text: text,
+        zeitstempel: new Date().toISOString()
+      })
     });
     if (r.ok) {
       zeig('✅ Erfolgreich! KI erstellt jetzt den Post-Text.', 'success');
@@ -128,6 +150,7 @@ async function senden() {
   }
   document.getElementById('btn').disabled = false;
 }
+
 function zeig(msg, cls) {
   const s = document.getElementById('status');
   s.textContent = msg; s.className = 'status ' + cls; s.style.display = 'block';
